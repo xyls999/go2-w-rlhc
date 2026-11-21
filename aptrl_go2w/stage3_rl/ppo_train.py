@@ -665,7 +665,11 @@ class TemporalWheelResidualActor(nn.Module):
                         if ns["sub_al"] == 0:
                             if not (abs(eyb) > 0.010 or abs(ywb) > 0.012 or xb > 30.52 or xb < 30.22 or abs(np.sin(ph4)) >= 0.28):
                                 ns["sub_al"] = 1
-                        elif not (ns["set_cnt"] == 0 and xb < perch_x):
+                            elif (xb >= 29.95 and abs(eyb) <= 0.10 and abs(ywb) <= 0.15
+                                  and abs(np.sin(ph4)) < 0.40):
+                                ns["sub_al"] = 1
+                        elif not (ns["set_cnt"] == 0 and xb < perch_x - 0.35
+                                    and float(dist_riser[bi]) > 0.22):
                             ns["set_cnt"] += 1
                             if ns["set_cnt"] >= 22:
                                 ns["p_mode"] = 1; ns["hop_el"] = 0; ns["set_cnt"] = 0; ns["sub_al"] = 0

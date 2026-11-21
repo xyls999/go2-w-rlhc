@@ -115,7 +115,7 @@ def main():
         new_ck = out_dir / f"model_bc_r{r}.pt"
         cmd = [sys.executable, r"E:\desktop-rl-apl\rl_rsl\bc_temporal_tire.py",
                "--data", str(merged), "--out", str(new_ck), "--init", str(args.base),
-               "--epochs", str(args.epochs)]
+               "--epochs", str(args.epochs), "--chunk", "100000"]
         print("  retrain:", " ".join(cmd), flush=True)
         subprocess.run(cmd, check=True)
         ck = new_ck
