@@ -24,7 +24,7 @@ DEC = REPO / "stage2_tvae/candidates/20261113T153754Z/tvae_decoders.npz"
 LO, HI = 21.0, 28.2
 
 
-def rollout_labels(ckpt, seeds, alpha_noise=0.0):
+def rollout_labels(ckpt, seeds, alpha_noise=0.0, lo=LO, hi=HI):
     from exact_edge_v4_expert import ExactEdgeObsExpert
     from eval_v4_multiseed_now import load_merged_params
     from common.eval_protocol import material_command_speed
@@ -56,7 +56,7 @@ def rollout_labels(ckpt, seeds, alpha_noise=0.0):
             if alpha_noise > 0:
                 a = a + np.random.default_rng(seed * 1000 + st).normal(0, alpha_noise, a.shape)
             lab = teacher.act(obs[None], True)
-            if LO <= x <= HI:
+            if lo <= x <= hi:
                 O.append(obs); A.append(lab)
             obs, _, done, info = env.step(a)
             if done:
@@ -89,18 +89,22 @@ def main():
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--seeds", type=int, default=16)
     ap.add_argument("--noise", type=float, default=0.0)
+    ap.add_argument("--lo", type=float, default=21.0)
+    ap.add_argument("--hi", type=float, default=28.2)
     ap.add_argument("--epochs", type=int, default=30)
+    ap.add_argument("--base", default="")
     ap.add_argument("--out-dir", default=r"E:\desktop-rl-apl\rl_rsl\runs\tire_bc_dagger")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     ck = Path(args.ckpt)
+    args.base = str(Path(args.base) if args.base else Path(args.ckpt))
     base = r"E:\desktop-rl-apl\rl_rsl\data\tire_expert_v5_approach.npz"
-    sets = [base]
+    sets = [base] + [str(x) for x in sorted(Path(args.out_dir).glob("dagger_r*.npz"))]
     for r in range(1, args.rounds + 1):
         print(f"[dagger round {r}] labels from BC rollout ({ck})", flush=True)
         seeds = [8900 + i for i in range(args.seeds)]
-        O, A, E = rollout_labels(ck, seeds, args.noise)
+        O, A, E = rollout_labels(ck, seeds, args.noise, args.lo, args.hi)
         if O:
             npz = out_dir / f"dagger_r{r}.npz"
             np.savez_compressed(npz, obs=np.concatenate(O), act=np.concatenate(A),
@@ -110,7 +114,7 @@ def main():
         merge(sets, merged)
         new_ck = out_dir / f"model_bc_r{r}.pt"
         cmd = [sys.executable, r"E:\desktop-rl-apl\rl_rsl\bc_temporal_tire.py",
-               "--data", str(merged), "--out", str(new_ck), "--init", str(ck),
+               "--data", str(merged), "--out", str(new_ck), "--init", str(args.base),
                "--epochs", str(args.epochs)]
         print("  retrain:", " ".join(cmd), flush=True)
         subprocess.run(cmd, check=True)

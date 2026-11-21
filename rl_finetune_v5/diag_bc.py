@@ -15,12 +15,12 @@ from common.eval_protocol import material_command_speed  # noqa: E402
 from train_mp import EnvWrap  # noqa: E402
 
 
-def run(ckpt, start_x, seeds, max_steps=1200):
+def run(ckpt, start_x, seeds, max_steps=2600):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     ck, arch, passthrough, enc, actor, nm, ns = build_from_checkpoint(Path(ckpt), dev)
     print("arch:", arch, "passthrough:", passthrough)
     for seed in seeds:
-        e = EnvWrap(seed, start_x)
+        e = EnvWrap(seed, start_x if start_x > 0 else None)
         actor.reset_context()
         best = 0.0
         ys = []

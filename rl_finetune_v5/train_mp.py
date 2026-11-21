@@ -29,6 +29,7 @@ REW_SCALE = 0.01
 W = None
 GOAL_X = 27.6
 STUCK_AFTER = 700
+MAX_STEPS = 9000
 
 
 class EnvWrap:
@@ -36,7 +37,7 @@ class EnvWrap:
         kw = dict(seed=seed, fixed_track=str(TRACK), eval_mode=True, episode_len=9000,
                   eval_protocol="pose-v1", decoder_path=str(DEC),
                   material_aux_limit=6.0, material_wheel_control="residual_v1")
-        self.start_x = None if start_x is None else float(start_x)
+        self.start_x = None if (start_x is None or float(start_x) <= 0) else float(start_x)
         if self.start_x is not None:
             kw["material_eval_start"] = float(start_x) if self.start_x in (21.5, 30.2) else 21.5
         self.env = Go2WEnv(**kw)
@@ -71,12 +72,18 @@ class EnvWrap:
 _ENV = None
 
 
-def _worker_init(seed, start_x, goal_x, wdict, stuck_after=700):
-    global _ENV, GOAL_X, W, STUCK_AFTER
+def _worker_init(seed, start_x, goal_x, wdict, stuck_after=700, max_steps=9000):
+    global _ENV, GOAL_X, W, STUCK_AFTER, MAX_STEPS
+    MAX_STEPS = max_steps
+    from multiprocessing import current_process
     GOAL_X = goal_x
     STUCK_AFTER = stuck_after
     W = RewardWeights(**wdict)
-    _ENV = EnvWrap(seed, start_x)
+    try:
+        idx = current_process()._identity[0] - 1
+    except Exception:
+        idx = 0
+    _ENV = EnvWrap(seed + idx, start_x)
 
 
 def _get_obs(step):
@@ -108,8 +115,8 @@ def _step(payload):
     x0 = float(d.qpos[0])
     rew = parts["total"]
     e.parts_acc["total"] += rew
-    stuck = (step > STUCK_AFTER and x0 < GOAL_X - 0.4 and e.stuck_ref is not None
-             and (x0 - e.stuck_ref) < 0.15)
+    stuck = ((step > STUCK_AFTER and x0 < GOAL_X - 0.4 and e.stuck_ref is not None
+             and (x0 - e.stuck_ref) < 0.15) or step >= MAX_STEPS)
     finished = False
     ok = False
     if step % 100 == 0:
@@ -210,10 +217,12 @@ def main():
     ap.add_argument("--iters", type=int, default=200)
     ap.add_argument("--envs", type=int, default=10)
     ap.add_argument("--lr", type=float, default=4e-5)
-    ap.add_argument("--start-x", type=float, default=21.5)
+    ap.add_argument("--start-x", type=float, default=0.0)
     ap.add_argument("--goal-x", type=float, default=27.6)
     ap.add_argument("--bc-anchor", type=float, default=0.0)
     ap.add_argument("--stuck-after", type=int, default=700)
+    ap.add_argument("--std-scale", type=float, default=0.5)
+    ap.add_argument("--max-steps", type=int, default=9000)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
@@ -233,9 +242,10 @@ def main():
     from stage3_rl.ppo_train import Critic
     critic = Critic().to(dev)
     with torch.no_grad():
-        actor.log_std[:16] = 0.40; actor.log_std[16:28] = 0.24; actor.log_std[28:] = 0.60
+        import math
+        actor.log_std.add_(math.log(args.std_scale))
         if hasattr(actor, "wheel_log_std"):
-            actor.wheel_log_std.fill_(0.20)
+            actor.wheel_log_std.add_(math.log(args.std_scale))
     opt = torch.optim.AdamW(
         [{"params": [p for p in list(enc.parameters()) + list(actor.parameters()) if p.requires_grad],
           "lr": args.lr}, {"params": critic.parameters(), "lr": 3e-4}], weight_decay=1e-4)
@@ -243,7 +253,8 @@ def main():
     W = RewardWeights(lane=60.0, lane_deadband=0.08, lane_block_mult=5.0)
     ctx = get_context("spawn")
     pool = ctx.Pool(args.envs, initializer=_worker_init,
-                    initargs=(8800, args.start_x, args.goal_x, dict(W.__dict__), args.stuck_after))
+                    initargs=(8800, args.start_x, args.goal_x, dict(W.__dict__), args.stuck_after,
+                              args.max_steps))
     (out / "run_config.json").write_text(json.dumps(
         {"init": args.init, "arch": arch, "iters": args.iters, "envs": args.envs,
          "start_x": args.start_x, "goal_x": args.goal_x, "lr": args.lr,
