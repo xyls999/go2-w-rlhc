@@ -1,21 +1,9 @@
-﻿# v5 当前最佳策略（全程 BC + 松弛 FSM）
+﻿# v6 赛道当前最佳策略（全程 BC，确定性执行）
 
-- 权重: rl_rsl/runs/v5_bc_best/model_bc.pt （= bc_full4 权重，解码器元信息已对齐配对 TVAE）
-- 配对解码器: stage2_tvae/candidates/20261113T153754Z/tvae_decoders.npz
-  sha256 = 5d7e8d8612874e511863eb5149378fef11f339a3c340e316d5a54f7c974d3b17
-- PolicyRunner(ckpt, decoder_path=该 npz) 可正常加载（已验证）
-- 32 seed 确定性评测（pose-v1, 0.5m 起跑）:
-  - >=25.4m: 32/32
-  - >=26.4m: 32/32
-  - >=27.6m: 30/32
-  - >=29.8m: 18/32
-  - >=30.4m: 18/32
-  - >=33.5m: 0/32
-  - >=100m : 0/32
-- 剩余卡点（已逐帧定位）: 30.4-30.7m 第一级台阶前的"爬行对齐"。
-  教师用 4Hz 恒定 aux≈0.80 的爬行步态推进到 30.65 再起跳；
-  策略在同一状态只输出 aux≈0.4，蹭不动。原因是逐帧 BC 对该周期性步态做了相位平均。
-- 已加入的机制（当前 best 中表为零、不改变行为）:
-  - hop_table/hop_wheel + hop_mask：按 (p_idx, hop_el) 查表的起跳相位替换
-  - creep_table/creep_wheel + creep_mask：按 4Hz 时钟桶查表的爬行相位替换
-  - rl_rsl/fit_hop_table.py：用教师数据闭式拟合上述表
+- 权重: rl_rsl/runs/v5_bc_best/model_bc.pt （来源 bc_v6_3）
+- 赛道: results/diagnostics/robocon-material-preview-20261119-v6/scene.xml
+  sha256 = 8d555e2265117624683d98e55c8a44e56522e2e8134657f9dea12bba2aa2d12f
+- 32 seed 评测: 16/32 完成 100m（中位 98.5m，均值 69.2m）
+  - >=27.6m: 26/32；>=33.5m: 20/32；>=40m: 20/32
+- 失败: body_contact 6（轮胎/砖块）、timeout 6（95-97m 收尾及 41m）、attitude 4
+- v6 与 v5 差异: 30-44m 平地化、独木桥 4m 宽 2.5mm 高、桥侧缺口 6.2m、钻框顶杆 0.63m

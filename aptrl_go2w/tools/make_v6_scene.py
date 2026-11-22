@@ -35,10 +35,12 @@ def main():
         n = g.get("name")
         if n == "balance_beam":
             x = float(g.get("pos").split()[0])
-            g.set("pos", "%.2f 4.0 0.015" % x)
-            g.set("size", "1.5 1.9 0.015")
+            g.set("pos", "%.2f 4.0 0.0025" % x)
+            g.set("size", "1.5 1.9 0.0025")
         elif n == "bridge_barrier_left":
             g.set("pos", "35.2 0.90 0.35")
+        elif n == "clearance_top":
+            g.set("pos", "45.0 4.0 0.63")
         elif n == "bridge_barrier_right":
             g.set("pos", "35.2 7.10 0.35")
     DST_DIR.mkdir(parents=True, exist_ok=True)

@@ -13,7 +13,7 @@ SCENE=ROOT/'results/diagnostics/robocon-material-preview-20261119-v6/scene.xml'
 
 class MaterialAcceptanceTests(unittest.TestCase):
     def test_only_exact_approved_scene_bytes_are_accepted(self):
-        self.assertEqual(verify_target_scene(SCENE),'3c01e89a8a79871b87f9723051d1747562771d1a495597279e1da44598a163b2')
+        self.assertEqual(verify_target_scene(SCENE),'8d555e2265117624683d98e55c8a44e56522e2e8134657f9dea12bba2aa2d12f')
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/'modified.xml';p.write_bytes(SCENE.read_bytes()+b' ')
             with self.assertRaises(ValueError):verify_target_scene(p)

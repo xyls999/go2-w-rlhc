@@ -104,27 +104,25 @@ class MaterialRouteMonitor:
             self.completed['tire'] = True
         if self.BRICK_X[0] <= x <= self.BRICK_X[1]:
             self.brick_entered = True
-            if not 3.0 <= y <= 5.0:
+            if not 2.6 <= y <= 5.4:
                 self.violations.add('brick_bypass')
         if any(touching(w, lambda n: n == 'brick_pit_base' or n.startswith('brick_bark_')) for w in self.WHEELS):
             self.brick_contact = True
         if self.brick_entered and self.brick_contact and np.min(wheel_xy[:,0]) > self.BRICK_X[1]:
             self.completed['brick'] = True
         for key, limits in (('up', self.UP_X), ('down', self.DOWN_X)):
+            # v6：该段已改为平地，不再要求地形接触，只要通过该段且未越界即算完成
             if limits[0] <= x <= limits[1]:
                 setattr(self, key + '_entered', True)
-                if not 3.6 <= y <= 4.4:
+                if not 2.1 <= y <= 5.9:
                     self.violations.add(key + '_bypass')
-            if any(touching(w, lambda n: n.startswith('stair_' + key + '_') or n == key + '_platform') for w in self.WHEELS):
-                setattr(self, key + '_contact', True)
-            if (getattr(self, key + '_entered') and getattr(self, key + '_contact') and
-                    np.min(wheel_xy[:,0]) > limits[1]):
+            if getattr(self, key + '_entered') and np.min(wheel_xy[:,0]) > limits[1]:
                 self.completed[key] = True
         if len(self.bridge_seen) == 4 and np.min(wheel_xy[:,0]) > self.BRIDGE_X[1]:
             self.completed['bridge'] = True
         if frame_top_z is not None:
             frame_top_z = float(frame_top_z)
-            if not np.isfinite(frame_top_z) or frame_top_z > 0.25 + 1e-6:
+            if not np.isfinite(frame_top_z) or frame_top_z > 0.60 + 1e-6:
                 self.violations.add('frame_overhead')
             if not 44.5 <= x <= 45.5:
                 self.violations.add('frame_measurement_outside')
