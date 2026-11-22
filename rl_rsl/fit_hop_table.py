@@ -33,12 +33,12 @@ def main():
         if i == len(obs_all) or ep_all[i] != ep_all[start]:
             eps.append((obs_all[start:i], act_all[start:i])); start = i
 
-    sums = np.zeros((6, 96, 29), np.float64)
+    sums = np.zeros((6, 130, 29), np.float64)
     csums = np.zeros((6, 40, 29), np.float64)
     csumsw = np.zeros((6, 40, 1), np.float64)
     ccnts = np.zeros((6, 40), np.float64)
-    sumsw = np.zeros((6, 96, 1), np.float64)
-    cnts = np.zeros((6, 96), np.float64)
+    sumsw = np.zeros((6, 130, 1), np.float64)
+    cnts = np.zeros((6, 130), np.float64)
     L = PROPRIO + 64 + GAIT + actor.KIN_DIM
     for ob, ac in eps:
         ob_n = np.clip((ob - nm) / ns, -10, 10).astype(np.float32)
@@ -46,7 +46,8 @@ def main():
         kin_np = kin
         pid = np.clip(np.round(kin_np[:, 26 + 16] * 5.0), 0, 5).astype(int)
         pm = kin_np[:, 26 + 17]
-        hel = np.clip(np.round(kin_np[:, 26 + 18] * 30.0), 0, 95).astype(int)
+        xk = kin_np[:, 0] * 15.0 + 25.0
+        hel = np.clip(np.round((xk - 30.40) / 0.02), 0, 129).astype(int)
         sg5 = kin_np[:, 26 + 5]
         xest = kin_np[:, 0] * 15.0 + 25.0
         ph = (np.arange(len(kin_np)) * 0.01 * 4.0) % 1.0
