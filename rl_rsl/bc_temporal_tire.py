@@ -1,4 +1,4 @@
-﻿"""在"带相位可观测"的时序 actor（temporal_residual_v4）上用轮胎示范做 BC。
+"""在"带相位可观测"的时序 actor（temporal_residual_v4）上用轮胎示范做 BC。
 
 为什么这次能成：该 actor 输入里含我加的 FSM 相位特征（触发步/hopping 帧号/阶段），
 "同一位置不同相位要输出不同动作"这一多值问题被显式解开，监督回归不再是"平均化"。
@@ -89,7 +89,8 @@ def main():
                 mu, _, h = actor.forward_seq(base_in[:, c0:c1], res_in[:, c0:c1],
                                              ring_all[:, c0:c1], h0=h)
                 ac_t = ac_t_all[c0:c1]
-                loss = (((mu[0] - ac_t) ** 2) * w).sum() / (w.sum() * len(ac_t))
+                rw = 1.0 + 3.0 * (kin_t[c0:c1, 26 + 17] > 0.5).float()
+                loss = ((((mu[0] - ac_t) ** 2) * w).sum(-1) * rw).sum() / (w.sum() * len(ac_t))
                 opt.zero_grad(); loss.backward()
                 torch.nn.utils.clip_grad_norm_(
                     [p for p in list(enc.parameters()) + list(actor.parameters()) if p.requires_grad], 1.0)

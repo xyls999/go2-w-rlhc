@@ -598,7 +598,7 @@ class TemporalWheelResidualActor(nn.Module):
                 sg = 2; ns["st_loc"] = 0
             elif sg == 2 and (xb >= 27.40 or ns["st_loc"] >= 65):
                 sg = 3; ns["st_loc"] = 0
-            elif sg == 3 and abs(eyb - 0.72) <= 0.036 and abs(ywb) <= 0.030:
+            elif sg == 3 and ((abs(eyb - 0.72) <= 0.10 and abs(ywb) <= 0.06) or xb >= 29.55):
                 sg = 4; ns["st_loc"] = 0
             elif sg == 4 and xb >= 29.78:
                 sg = 5; ns["st_loc"] = 0; ns["sub_al"] = 0; ns["set_cnt"] = 0; ns["p_idx"] = 0; ns["p_mode"] = 0; ns["hop_el"] = 0
@@ -648,7 +648,7 @@ class TemporalWheelResidualActor(nn.Module):
             elif sg in (2, 3, 4, 12):
                 ns["st_loc"] += 1
             elif sg == 5:
-                perch_x = (30.65, 30.90, 31.22, 31.54, 31.86, 32.18)[min(ns["p_idx"], 5)]
+                perch_x = (30.52, 30.78, 31.10, 31.42, 31.74, 32.06)[min(ns["p_idx"], 5)]
                 on_st = ns["p_idx"] > 0
                 ph4 = 2.0 * np.pi * 4.0 * (st_i * 0.01)
                 if ns["p_mode"] == 0:
