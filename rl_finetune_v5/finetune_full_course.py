@@ -105,9 +105,10 @@ def precompute_kin(actor_cpu, ob_norm, x0=None):
     x0: 若示范从赛道中途开始（如 27.35m），把 x 积分器初值对齐到真实位置，
     否则 kin 的 x 特征整体错位。
     """
-    actor_cpu.reset_context()
-    if x0 is not None:
-        actor_cpu._x_int = torch.full((1,), float(x0), dtype=torch.float32)
+    if x0 is not None and hasattr(actor_cpu, "prime_x0"):
+        actor_cpu.prime_x0(x0)
+    else:
+        actor_cpu.reset_context()
     out = []
     with torch.no_grad():
         t = torch.from_numpy(ob_norm)

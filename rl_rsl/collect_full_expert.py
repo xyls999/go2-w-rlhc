@@ -38,18 +38,18 @@ def one(seed):
                   material_aux_limit=6.0, material_wheel_control="residual_v1", **kw)
     d = env.data
     env.reset()
-    O, A = [], []
+    O, A, X = [], [], []
     reason = "max_steps"
     for st in range(9000):
         x = float(d.qpos[0])
         env.vx_cmd = material_command_speed(st, x, "start_ramp_100_v1")
         obs = env._get_obs()
         a = ex.act(obs[None], True)
-        O.append(obs.astype(np.float32)); A.append(a.astype(np.float32))
+        O.append(obs.astype(np.float32)); A.append(a.astype(np.float32)); X.append(x)
         obs, _r, done, info = env.step(a)
         if done:
             reason = str(info.get("reason")); break
-    return seed, np.stack(O), np.stack(A), float(d.qpos[0]), reason, st
+    return seed, np.stack(O), np.stack(A), float(d.qpos[0]), reason, st, np.asarray(X, np.float32)
 
 
 if __name__ == "__main__":
@@ -61,16 +61,16 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     mp.freeze_support()
-    O, A, E = [], [], []
+    O, A, E, XS = [], [], [], []
     with mp.get_context("spawn").Pool(8, initializer=_init, initargs=(args.start,)) as pool:
-        for seed, ob, ac, mx, rsn, st in pool.imap_unordered(one, range(args.seed0, args.seed0 + args.seeds)):
+        for seed, ob, ac, mx, rsn, st, xs in pool.imap_unordered(one, range(args.seed0, args.seed0 + args.seeds)):
             print(f"  seed={seed} max_x={mx:.2f} steps={st} reason={rsn}", flush=True)
             if mx < args.min_x:
                 continue
-            O.append(ob); A.append(ac)
+            O.append(ob); A.append(ac); XS.append(xs)
             E.append(np.full(len(ob), seed, np.int64))
     if not O:
         print("no episodes"); sys.exit(1)
     np.savez_compressed(args.out, obs=np.concatenate(O), act=np.concatenate(A),
-                        ep=np.concatenate(E))
+                        ep=np.concatenate(E), x=np.concatenate(XS))
     print(f"saved {len(O)} eps, {sum(len(o) for o in O)} steps -> {args.out}")
