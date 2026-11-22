@@ -103,16 +103,22 @@ def load_policy(ckpt_path, device, decoder_path=TVAE_DEC):
     split_ext = any(k.startswith("res_net.") for k in ck["enc"])
     pass_raw = ck.get("actor_arch") == "temporal_residual_v4" and bool(ck.get("extero_passthrough", False))
     enc = ExteroEncoder(split_frozen=split_ext, passthrough_raw=pass_raw).to(device)
+    norm_mean_arr = np.asarray(ck["norm"]["mean"], dtype=np.float32)
+    norm_std_arr = np.sqrt(np.asarray(ck["norm"]["var"], dtype=np.float32) + 1e-8)
     if ck.get("actor_arch") == "feedforward_kin_v4":
         actor = FeedforwardKinActor(
             hidden=int(ck.get("actor_hidden", 768)),
             gru_hidden=int(ck.get("gru_hidden", 256)),
+            raw_norm_mean=norm_mean_arr,
+            raw_norm_std=norm_std_arr,
             extero_passthrough=pass_raw,
         ).to(device)
     elif ck.get("actor_arch") == "temporal_residual_v4":
         actor = TemporalWheelResidualActor(
             hidden=int(ck.get("actor_hidden", 768)),
             gru_hidden=int(ck.get("gru_hidden", 256)),
+            raw_norm_mean=norm_mean_arr,
+            raw_norm_std=norm_std_arr,
             extero_passthrough=pass_raw,
         ).to(device)
     elif is_temp:
