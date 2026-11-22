@@ -421,6 +421,10 @@ class TemporalWheelResidualActor(nn.Module):
         self.wheel_log_std = nn.Parameter(torch.tensor(float(np.log(0.5))))
         self.hop_table = nn.Parameter(torch.zeros(6, 96, ACT_DIM))
         self.hop_wheel = nn.Parameter(torch.zeros(6, 96, 1))
+        self.creep_table = nn.Parameter(torch.zeros(6, 40, ACT_DIM))
+        self.creep_wheel = nn.Parameter(torch.zeros(6, 40, 1))
+        self.register_buffer("hop_mask", torch.zeros(6, 96))
+        self.register_buffer("creep_mask", torch.zeros(6, 40))
         nm426 = np.zeros(426, dtype=np.float32) if raw_norm_mean is None else np.asarray(raw_norm_mean, dtype=np.float32)
         ns426 = np.ones(426, dtype=np.float32) if raw_norm_std is None else np.asarray(raw_norm_std, dtype=np.float32)
         self.register_buffer("p_mean", torch.as_tensor(nm426[:33], dtype=torch.float32))
@@ -775,12 +779,33 @@ class TemporalWheelResidualActor(nn.Module):
 
     def _hop_blend(self, mu29, wheel_mu, res_in):
         """起跳相位：用相位表直接给出教师动作（表为零时完全等价于原策略）。"""
-        if float(self.hop_table.abs().max()) == 0.0:
+        if float(self.hop_table.abs().max()) == 0.0 and float(self.creep_table.abs().max()) == 0.0:
             return mu29, wheel_mu
         pm, pid, hel = self._hop_phase(res_in)
-        tab = self.hop_table.to(mu29.dtype)[pid, hel]
-        wtab = self.hop_wheel.to(wheel_mu.dtype)[pid, hel]
-        return mu29 * (1.0 - pm) + tab * pm, wheel_mu * (1.0 - pm) + wtab * pm
+        if float(self.hop_table.abs().max()) > 0.0:
+            hm = self.hop_mask.to(mu29.dtype)[pid, hel].unsqueeze(-1)
+            tab = self.hop_table.to(mu29.dtype)[pid, hel]
+            wtab = self.hop_wheel.to(wheel_mu.dtype)[pid, hel]
+            g = pm * hm
+            mu29 = mu29 * (1.0 - g) + tab * g
+            wheel_mu = wheel_mu * (1.0 - g) + wtab * g
+        if float(self.creep_table.abs().max()) > 0.0:
+            kin = res_in[..., -self.KIN_DIM:]
+            sg5 = kin[..., 26 + 5].clamp(0.0, 1.0).unsqueeze(-1)
+            B = mu29.shape[0]
+            if self._step_cnt is None or self._step_cnt.shape[0] != B:
+                cnt = torch.zeros((B,), device=mu29.device, dtype=mu29.dtype)
+            else:
+                cnt = self._step_cnt.to(mu29.dtype)
+            ph = torch.frac(cnt * 0.01 * 4.0)
+            cb = (ph * 40.0).long().clamp(0, 39)
+            ctab = self.creep_table.to(mu29.dtype)[pid, cb]
+            cwtab = self.creep_wheel.to(wheel_mu.dtype)[pid, cb]
+            cm = self.creep_mask.to(mu29.dtype)[pid, cb].unsqueeze(-1)
+            g = sg5 * (1.0 - pm) * cm
+            mu29 = mu29 * (1.0 - g) + ctab * g
+            wheel_mu = wheel_mu * (1.0 - g) + cwtab * g
+        return mu29, wheel_mu
 
     def forward_seq(self, base_in_seq, res_in_seq, ring_seq, h0=None):
         """Batch sequence forward for fast GPU training!"""

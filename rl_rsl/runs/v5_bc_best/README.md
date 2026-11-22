@@ -1,17 +1,21 @@
 ﻿# v5 当前最佳策略（全程 BC + 松弛 FSM）
 
-- 权重: rl_rsl/runs/v5_bc_best/model_bc.pt （来源 bc_full4）
-- 数据: 46 条教师全程示范 / 262,913 步
+- 权重: rl_rsl/runs/v5_bc_best/model_bc.pt （= bc_full4 权重，解码器元信息已对齐配对 TVAE）
+- 配对解码器: stage2_tvae/candidates/20261113T153754Z/tvae_decoders.npz
+  sha256 = 5d7e8d8612874e511863eb5149378fef11f339a3c340e316d5a54f7c974d3b17
+- PolicyRunner(ckpt, decoder_path=该 npz) 可正常加载（已验证）
 - 32 seed 确定性评测（pose-v1, 0.5m 起跑）:
   - >=25.4m: 32/32
-  - >=26.4m: 32/32   (轮胎段全过)
+  - >=26.4m: 32/32
   - >=27.6m: 30/32
   - >=29.8m: 18/32
   - >=30.4m: 18/32
-  - >=33.5m: 0/32   (上楼梯第一级)
+  - >=33.5m: 0/32
   - >=100m : 0/32
-- 卡点: 30.4-30.7m 台阶前。实测在 x=30.71,z=0.37 处
-  教师 aux=1.82 / wheel=+0.18（起跳脉冲），策略 aux=0.38 / wheel=-1.02（无脉冲），
-  即"起跳相位"的动作没被 BC 学到（学生相位与教师相位在空间上错位）。
-  已尝试：松弛 FSM 门槛、提前 perch_x、DAgger(3 次)、p_mode 加权 BC、全程 PPO，
-  均无法让策略在该状态输出起跳脉冲。
+- 剩余卡点（已逐帧定位）: 30.4-30.7m 第一级台阶前的"爬行对齐"。
+  教师用 4Hz 恒定 aux≈0.80 的爬行步态推进到 30.65 再起跳；
+  策略在同一状态只输出 aux≈0.4，蹭不动。原因是逐帧 BC 对该周期性步态做了相位平均。
+- 已加入的机制（当前 best 中表为零、不改变行为）:
+  - hop_table/hop_wheel + hop_mask：按 (p_idx, hop_el) 查表的起跳相位替换
+  - creep_table/creep_wheel + creep_mask：按 4Hz 时钟桶查表的爬行相位替换
+  - rl_rsl/fit_hop_table.py：用教师数据闭式拟合上述表

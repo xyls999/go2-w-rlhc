@@ -34,6 +34,9 @@ def main():
             eps.append((obs_all[start:i], act_all[start:i])); start = i
 
     sums = np.zeros((6, 96, 29), np.float64)
+    csums = np.zeros((6, 40, 29), np.float64)
+    csumsw = np.zeros((6, 40, 1), np.float64)
+    ccnts = np.zeros((6, 40), np.float64)
     sumsw = np.zeros((6, 96, 1), np.float64)
     cnts = np.zeros((6, 96), np.float64)
     L = PROPRIO + 64 + GAIT + actor.KIN_DIM
@@ -44,6 +47,15 @@ def main():
         pid = np.clip(np.round(kin_np[:, 26 + 16] * 5.0), 0, 5).astype(int)
         pm = kin_np[:, 26 + 17]
         hel = np.clip(np.round(kin_np[:, 26 + 18] * 30.0), 0, 95).astype(int)
+        sg5 = kin_np[:, 26 + 5]
+        xest = kin_np[:, 0] * 15.0 + 25.0
+        ph = (np.arange(len(kin_np)) * 0.01 * 4.0) % 1.0
+        cb = np.clip((ph * 40.0).astype(int), 0, 39)
+        mc = (sg5 > 0.5) & (pm <= 0.5) & (xest >= 30.10) & (xest <= 30.68)
+        for j in np.nonzero(mc)[0]:
+            csums[pid[j], cb[j]] += ac[j, :29]
+            csumsw[pid[j], cb[j]] += ac[j, 29:30]
+            ccnts[pid[j], cb[j]] += 1
         m = pm > 0.5
         for j in np.nonzero(m)[0]:
             sums[pid[j], hel[j]] += ac[j, :29]
@@ -60,9 +72,21 @@ def main():
     print(f"filled rows={int(filled.sum())}/576, max|aux|={np.abs(tab).max():.3f}, "
           f"max|wheel|={np.abs(tabw).max():.3f}")
 
+    cfilled = ccnts > 0
+    ctab = np.zeros_like(csums)
+    ctabw = np.zeros_like(csumsw)
+    ctab[cfilled] = csums[cfilled] / ccnts[cfilled][:, None]
+    ctabw[cfilled] = csumsw[cfilled] / ccnts[cfilled][:, None]
+    ctab = np.clip(ctab, -args.clip, args.clip)
+    ctabw = np.clip(ctabw, -args.clip, args.clip)
+    print(f"creep rows={int(cfilled.sum())}/240, max|aux|={np.abs(ctab).max():.3f}")
     with torch.no_grad():
         actor.hop_table.copy_(torch.from_numpy(tab).to(actor.hop_table.device))
         actor.hop_wheel.copy_(torch.from_numpy(tabw).to(actor.hop_wheel.device))
+        actor.creep_table.copy_(torch.from_numpy(ctab).to(actor.creep_table.device))
+        actor.creep_wheel.copy_(torch.from_numpy(ctabw).to(actor.creep_wheel.device))
+        actor.hop_mask.copy_(torch.from_numpy(filled.astype(np.float32)).to(actor.hop_mask.device))
+        actor.creep_mask.copy_(torch.from_numpy(cfilled.astype(np.float32)).to(actor.creep_mask.device))
     state = {"enc": enc.state_dict(), "actor": actor.state_dict(),
              "critic": ck.get("critic", {}), "norm": ck["norm"], "iter": int(ck.get("iter", 0)),
              "actor_arch": arch, "extero_passthrough": past,
