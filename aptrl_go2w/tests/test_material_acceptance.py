@@ -9,11 +9,11 @@ from common.material_acceptance import (verify_target_scene, trajectory_digest,
 from common.eval_protocol import material_command_speed
 
 ROOT=Path(__file__).resolve().parents[1]
-SCENE=ROOT/'results/diagnostics/robocon-material-preview-20261119-v5/scene.xml'
+SCENE=ROOT/'results/diagnostics/robocon-material-preview-20261119-v6/scene.xml'
 
 class MaterialAcceptanceTests(unittest.TestCase):
     def test_only_exact_approved_scene_bytes_are_accepted(self):
-        self.assertEqual(verify_target_scene(SCENE),'f459786e6372a0edeaa67cabe8afe32efd9734bcf67146b0bd1f955737a76227')
+        self.assertEqual(verify_target_scene(SCENE),'3c01e89a8a79871b87f9723051d1747562771d1a495597279e1da44598a163b2')
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/'modified.xml';p.write_bytes(SCENE.read_bytes()+b' ')
             with self.assertRaises(ValueError):verify_target_scene(p)

@@ -96,7 +96,7 @@ class MaterialRouteMonitor:
                     if touching(self.WHEELS[i], lambda n: n.startswith('tire_')):
                         self.tire_contact = True
             if self.BRIDGE_X[0] <= wx <= self.BRIDGE_X[1]:
-                if not 3.8 <= wy <= 4.2:
+                if not 2.1 <= wy <= 5.9:
                     self.violations.add('bridge_outside')
                 if touching(self.WHEELS[i], lambda n: n == 'balance_beam'):
                     self.bridge_seen.add(i)

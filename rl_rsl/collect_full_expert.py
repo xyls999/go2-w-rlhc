@@ -13,7 +13,7 @@ TMP = Path(r"C:\Users\Administrator\AppData\Local\Temp\opencode")
 sys.path.insert(0, str(TMP))
 sys.path.insert(0, str(REPO))
 
-TRACK = REPO / "results/diagnostics/robocon-material-preview-20261119-v5/scene.xml"
+TRACK = REPO / "results/diagnostics/robocon-material-preview-20261119-v6/scene.xml"
 DEC = REPO / "stage2_tvae/candidates/20261113T153754Z/tvae_decoders.npz"
 
 

@@ -46,7 +46,7 @@ from stage3_rl.ppo_train import (GAIT, Critic, ExteroEncoder, FeedforwardKinActo
                                  TemporalWheelResidualActor)
 from stage3_rl.evaluate import PolicyRunner  # noqa: E402
 
-TRACK = REPO / "results/diagnostics/robocon-material-preview-20261119-v5/scene.xml"
+TRACK = REPO / "results/diagnostics/robocon-material-preview-20261119-v6/scene.xml"
 DEC = REPO / "stage2_tvae/candidates/20261113T153754Z/tvae_decoders.npz"
 POSE_SEED0 = 8800
 REW_SCALE = 0.01          # 原始奖励步均 ~1.2，缩放到 PPO 更稳；分项日志仍记录未缩放值

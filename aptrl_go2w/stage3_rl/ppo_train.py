@@ -628,6 +628,12 @@ class TemporalWheelResidualActor(nn.Module):
                 sg = 11; ns["st_loc"] = 0; ns["set_cnt"] = 0; ns["sub_al"] = 0
             elif sg == 11 and xb >= 43.35:
                 sg = 12; ns["st_loc"] = 0
+            if 29.80 <= xb < 44.40:
+                # v6：30-44m 已改为平地，不再需要台阶/引桥/独木桥的专用相位，
+                # 统一用 brick_trot 特征（策略在该相位下能稳定走平地）。
+                sg = 0
+                ns["p_idx"] = 0; ns["p_mode"] = 0; ns["hop_el"] = 0
+                ns["sub_al"] = 0; ns["set_cnt"] = 0
             ns["stg"] = sg
 
             # Encode stage one-hot (13) + internal timers/triggers (9) = 22 dims!
