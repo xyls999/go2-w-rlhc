@@ -424,6 +424,9 @@ class TemporalWheelResidualActor(nn.Module):
         self.creep_table = nn.Parameter(torch.zeros(6, 40, ACT_DIM))
         self.creep_wheel = nn.Parameter(torch.zeros(6, 40, 1))
         self.register_buffer("hop_mask", torch.zeros(6, 101))
+        self.brick_table = nn.Parameter(torch.zeros(165, ACT_DIM))
+        self.brick_wheel = nn.Parameter(torch.zeros(165, 1))
+        self.register_buffer("brick_mask", torch.zeros(165))
         self.register_buffer("creep_mask", torch.zeros(6, 40))
         nm426 = np.zeros(426, dtype=np.float32) if raw_norm_mean is None else np.asarray(raw_norm_mean, dtype=np.float32)
         ns426 = np.ones(426, dtype=np.float32) if raw_norm_std is None else np.asarray(raw_norm_std, dtype=np.float32)
@@ -445,6 +448,7 @@ class TemporalWheelResidualActor(nn.Module):
         self._step_cnt = None
         self._edge_mem = None
         self._nav_state = None
+        self._x0_override = None
 
     def _compute_kin_step(self, proprio_norm, extero_norm=None):
         """Causal single-step update of 48-D localized kinematic & maneuver-progress features!"""
@@ -467,6 +471,8 @@ class TemporalWheelResidualActor(nn.Module):
 
         if self._x_int is None or self._x_int.shape[0] != B or self._x_int.device != dev:
             self._x_int = torch.full((B,), 0.50, device=dev, dtype=torch.float32)
+            if getattr(self, "_x0_override", None) is not None:
+                self._x_int.fill_(float(self._x0_override))
             self._ey_int = -vy_cmd.clone()
             self._yaw_int = -(wyaw_cmd + 2.0 * self._ey_int) / 1.5
             self._prev_vcmd = vx_cmd.clone()
@@ -770,6 +776,11 @@ class TemporalWheelResidualActor(nn.Module):
         res_in = torch.cat([proprio, ext_res, gait, kin], dim=-1)
         return base_in, res_in
 
+    def prime_x0(self, x0):
+        """让内部 x 积分器从 x0 开始（用于中途起步的示范重放，需在 reset 后调用）。"""
+        self.reset_context()
+        self._x0_override = float(x0)
+
     def _hop_phase(self, res_in):
         kin = res_in[..., -self.KIN_DIM:]
         pid = (kin[..., 26 + 16] * 5.0).round().clamp(0, 5).long()
@@ -805,6 +816,17 @@ class TemporalWheelResidualActor(nn.Module):
             g = sg5 * (1.0 - pm) * cm
             mu29 = mu29 * (1.0 - g) + ctab * g
             wheel_mu = wheel_mu * (1.0 - g) + cwtab * g
+        if float(self.brick_table.abs().max()) > 0.0:
+            kin = res_in[..., -self.KIN_DIM:]
+            sg34 = (kin[..., 26 + 3].clamp(0.0, 1.0) + kin[..., 26 + 4].clamp(0.0, 1.0)).clamp(0.0, 1.0)
+            xb = (kin[..., 0] * 15.0 + 25.0 - 27.30) / 0.02
+            bb = xb.round().clamp(0, 164).long()
+            bm = self.brick_mask.to(mu29.dtype)[bb].unsqueeze(-1)
+            g = sg34.unsqueeze(-1) * bm
+            bt = self.brick_table.to(mu29.dtype)[bb]
+            bw = self.brick_wheel.to(wheel_mu.dtype)[bb]
+            mu29 = mu29 * (1.0 - g) + bt * g
+            wheel_mu = wheel_mu * (1.0 - g) + bw * g
         return mu29, wheel_mu
 
     def forward_seq(self, base_in_seq, res_in_seq, ring_seq, h0=None):

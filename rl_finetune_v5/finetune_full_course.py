@@ -99,9 +99,15 @@ def contact_names(model, data):
              mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, c.geom2) or "") for c in data.contact]
 
 
-def precompute_kin(actor_cpu, ob_norm):
-    """按推理顺序重放 causality 特征（与 dist() 内部逐步计算一致）。"""
+def precompute_kin(actor_cpu, ob_norm, x0=None):
+    """按推理顺序重放 causality 特征（与 dist() 内部逐步计算一致）。
+
+    x0: 若示范从赛道中途开始（如 27.35m），把 x 积分器初值对齐到真实位置，
+    否则 kin 的 x 特征整体错位。
+    """
     actor_cpu.reset_context()
+    if x0 is not None:
+        actor_cpu._x_int = torch.full((1,), float(x0), dtype=torch.float32)
     out = []
     with torch.no_grad():
         t = torch.from_numpy(ob_norm)

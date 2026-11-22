@@ -29,6 +29,7 @@ def main():
     ap.add_argument("--epochs", type=int, default=60)
     ap.add_argument("--chunk", type=int, default=4096)
     ap.add_argument("--lr", type=float, default=8e-5)
+    ap.add_argument("--kin-x0", type=float, default=None)
     args = ap.parse_args()
 
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -49,7 +50,7 @@ def main():
     parsed = []
     for ob, ac in eps:
         ob_n = np.clip((ob - nm) / ns, -10, 10).astype(np.float32)
-        kin = precompute_kin(actor_cpu, ob_n)
+        kin = precompute_kin(actor_cpu, ob_n, x0=args.kin_x0)
         parsed.append((torch.from_numpy(ob_n), torch.from_numpy(kin),
                        torch.from_numpy(ac.astype(np.float32))))
 
