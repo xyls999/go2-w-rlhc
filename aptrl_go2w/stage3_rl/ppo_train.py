@@ -419,6 +419,8 @@ class TemporalWheelResidualActor(nn.Module):
             torch.zeros(LATENT), torch.full((AUXD,), float(np.log(0.5))),
             torch.full((1,), float(np.log(2.0)))]))
         self.wheel_log_std = nn.Parameter(torch.tensor(float(np.log(0.5))))
+        self.hop_table = nn.Parameter(torch.zeros(6, 96, ACT_DIM))
+        self.hop_wheel = nn.Parameter(torch.zeros(6, 96, 1))
         nm426 = np.zeros(426, dtype=np.float32) if raw_norm_mean is None else np.asarray(raw_norm_mean, dtype=np.float32)
         ns426 = np.ones(426, dtype=np.float32) if raw_norm_std is None else np.asarray(raw_norm_std, dtype=np.float32)
         self.register_buffer("p_mean", torch.as_tensor(nm426[:33], dtype=torch.float32))
@@ -648,7 +650,7 @@ class TemporalWheelResidualActor(nn.Module):
             elif sg in (2, 3, 4, 12):
                 ns["st_loc"] += 1
             elif sg == 5:
-                perch_x = (30.52, 30.78, 31.10, 31.42, 31.74, 32.06)[min(ns["p_idx"], 5)]
+                perch_x = (30.63, 30.90, 31.22, 31.54, 31.86, 32.18)[min(ns["p_idx"], 5)]
                 on_st = ns["p_idx"] > 0
                 ph4 = 2.0 * np.pi * 4.0 * (st_i * 0.01)
                 if ns["p_mode"] == 0:
@@ -764,6 +766,22 @@ class TemporalWheelResidualActor(nn.Module):
         res_in = torch.cat([proprio, ext_res, gait, kin], dim=-1)
         return base_in, res_in
 
+    def _hop_phase(self, res_in):
+        kin = res_in[..., -self.KIN_DIM:]
+        pid = (kin[..., 26 + 16] * 5.0).round().clamp(0, 5).long()
+        pm = kin[..., 26 + 17].clamp(0.0, 1.0).unsqueeze(-1)
+        hel = (kin[..., 26 + 18] * 30.0).round().clamp(0, 95).long()
+        return pm, pid, hel
+
+    def _hop_blend(self, mu29, wheel_mu, res_in):
+        """起跳相位：用相位表直接给出教师动作（表为零时完全等价于原策略）。"""
+        if float(self.hop_table.abs().max()) == 0.0:
+            return mu29, wheel_mu
+        pm, pid, hel = self._hop_phase(res_in)
+        tab = self.hop_table.to(mu29.dtype)[pid, hel]
+        wtab = self.hop_wheel.to(wheel_mu.dtype)[pid, hel]
+        return mu29 * (1.0 - pm) + tab * pm, wheel_mu * (1.0 - pm) + wtab * pm
+
     def forward_seq(self, base_in_seq, res_in_seq, ring_seq, h0=None):
         """Batch sequence forward for fast GPU training!"""
         gru_out, hn = self.gru(res_in_seq, h0)
@@ -778,7 +796,7 @@ class TemporalWheelResidualActor(nn.Module):
         h_feat = self.ctx_proj(feat_in)
         res_mu = self.res_head(h_feat)
         wheel_mu = gate * self.wheel_head(h_feat)
-        mu29 = bounded_base + gate * res_mu
+        mu29, wheel_mu = self._hop_blend(bounded_base + gate * res_mu, wheel_mu, res_in_seq)
         return torch.cat([mu29, wheel_mu], dim=-1), gate, hn
 
     def dist(self, obs):
@@ -803,7 +821,7 @@ class TemporalWheelResidualActor(nn.Module):
         h_feat = self.ctx_proj(ctx_flat)
         res_mu = self.res_head(h_feat)
         wheel_mu = gate * self.wheel_head(h_feat)
-        mu29 = bounded_base + gate * res_mu
+        mu29, wheel_mu = self._hop_blend(bounded_base + gate * res_mu, wheel_mu, res_in)
         mu = torch.cat([mu29, wheel_mu], dim=-1)
         base_std = self.log_std.exp().expand_as(mu29)
         eff_std = (0.04 + 0.96 * gate.detach()) * base_std
@@ -850,8 +868,8 @@ class FeedforwardKinActor(TemporalWheelResidualActor):
         gate = torch.sigmoid(self.gate_net(feat_in))
         h_feat = self.ctx_proj(feat_in)
         res_mu = self.res_head(h_feat)
-        wheel_mu = gate * self.wheel_head(h_feat)
-        mu29 = bounded_base + gate * res_mu
+        mu29, wheel_mu = self._hop_blend(bounded_base + gate * res_mu, wheel_mu, res_in)
+        mu = torch.cat([mu29, wheel_mu], dim=-1)
         mu = torch.cat([mu29, wheel_mu], dim=-1)
         base_std = self.log_std.exp().expand_as(mu29)
         eff_std = (0.04 + 0.96 * gate.detach()) * base_std
@@ -1087,7 +1105,10 @@ def worker_main(conn, cfg):
 
     def load_state(st):
         enc.load_state_dict(st["enc"])
-        actor.load_state_dict(st["actor"])
+        try:
+            actor.load_state_dict(st["actor"])
+        except RuntimeError:
+            actor.load_state_dict(st["actor"], strict=False)
         norm.load(st["norm"])
 
     reward_log = (open(cfg['reward_log'], 'x', encoding='utf-8')
@@ -1837,7 +1858,10 @@ def main(argv=None):
                     lr.actor.log_std.copy_(ck['actor']['log_std'])
             else:
                 lr.enc.load_state_dict(ck["enc"])
-                lr.actor.load_state_dict(ck["actor"])
+                try:
+                    lr.actor.load_state_dict(ck["actor"])
+                except RuntimeError:
+                    lr.actor.load_state_dict(ck["actor"], strict=False)
             lr.critic.load_state_dict(ck["critic"])
             lr.norm.load(ck["norm"])
             if (args.latent_std is not None or args.aux_std is not None

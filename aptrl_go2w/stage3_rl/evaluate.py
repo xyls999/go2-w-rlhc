@@ -129,7 +129,10 @@ def load_policy(ckpt_path, device, decoder_path=TVAE_DEC):
     else:
         actor = Actor().to(device)
     enc.load_state_dict(ck["enc"])
-    actor.load_state_dict(ck["actor"])
+    try:
+        actor.load_state_dict(ck["actor"])
+    except RuntimeError:
+        actor.load_state_dict(ck["actor"], strict=False)
     enc.eval()
     actor.eval()
     norm_mean = ck["norm"]["mean"]

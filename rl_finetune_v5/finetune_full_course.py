@@ -1,4 +1,4 @@
-﻿"""从现有 checkpoint 出发的**全程** PPO 微调（v5 赛道，自定义奖励）。
+"""从现有 checkpoint 出发的**全程** PPO 微调（v5 赛道，自定义奖励）。
 
 用法（先冒烟，再正式训练）::
 
@@ -71,7 +71,10 @@ def build_from_checkpoint(ckpt_path: Path, device: str):
                       raw_norm_mean=nm, raw_norm_std=ns,
                       extero_passthrough=passthrough).to(device)
     enc.load_state_dict(ck["enc"])
-    actor.load_state_dict(ck["actor"])
+    try:
+        actor.load_state_dict(ck["actor"])
+    except RuntimeError:
+        actor.load_state_dict(ck["actor"], strict=False)
     for p in actor.log_std.parameters() if isinstance(actor.log_std, nn.Module) else [actor.log_std]:
         p.requires_grad_(False)
     if hasattr(actor, "wheel_log_std"):
